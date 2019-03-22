@@ -1,0 +1,44 @@
+#!/bin/sh
+#
+# Incremental daily data backups
+
+RSYNC="/usr/bin/sudo /usr/bin/rsync"
+TODAY=`date +"%Y%m%d"`
+YESTERDAY=`date -d "1 day ago" +"%Y%m%d"`
+
+# Set how many days of backup you want to keep, 3 is default.
+OLDBACKUP=`date -d "3 days ago" +"%Y%m%d"`
+
+SHAREUSR="/share/CACHEDEV1_DATA/en0ch.se"
+
+EXCLUDES="$SHAREUSR/servername.excludes"
+LOG="$SHAREUSR/BACKUP_success.log"
+
+SOURCE="rbuning@huffalump:/"
+DESTINATION="$SHAREUSR/$TODAY"
+
+# Keep database backups in a separate directory.
+mkdir -p $SHAREUSR/db
+
+# SSH
+rsync -avx -e 'ssh -p22' \
+ --rsync-path="$RSYNC" \
+ --exclude-from=$EXCLUDES \
+ --numeric-ids \
+ --delete -r \
+ --link-dest=../$YESTERDAY $SOURCE $DESTINATION
+
+# MySQL
+ssh -p22 root@en0ch.se "mysqldump \
+ --user=root \
+ --password=SUPER-SECRET-PASSWORD \
+ --all-databases \
+ --lock-tables \
+ | bzip2" > $SHAREUSR/db/$TODAY.sql.bz2
+
+# Un-comment this if you want to remove old backups (older than 3 days)
+# rm $SHAREUSR/db/$OLDBACKUP.sql.bz2
+# rm -R $SHAREUSR/$OLDBACKUP
+
+# Writes a log of successful updates
+echo -e "\nBACKUP success-$TODAY " >> $LOG
